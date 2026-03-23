@@ -1,0 +1,14 @@
+{
+  "name": "connect4-ai",
+  "version": "0.1.0",
+  "description": "Evolutionary training system for Connect 4 AI",
+  "type": "module",
+  "scripts": {
+    "train":     "node scripts/train.js",
+    "simulate":  "node scripts/simulate.js",
+    "benchmark": "node scripts/benchmark.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

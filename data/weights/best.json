@@ -1,0 +1,16 @@
+{
+  "id": "bot_0000",
+  "generation": 0,
+  "weights": {
+    "centreBonus": 3,
+    "three": 5,
+    "two": 2,
+    "win": 100,
+    "terminalWin": 1000000
+  },
+  "fitness": 0,
+  "gamesPlayed": 0,
+  "wins": 0,
+  "losses": 0,
+  "draws": 0
+}
