@@ -1,16 +1,14 @@
 {
-  "id": "bot_0000",
-  "generation": 0,
   "weights": {
-    "centreBonus": 3,
-    "three": 5,
-    "two": 2,
-    "win": 100,
-    "terminalWin": 1000000
+    "centreBonus": 2.627436048943782,
+    "three": 4.529394618206572,
+    "two": 1.1898910219416543,
+    "win": 200,
+    "terminalWin": 1000000,
+    "depthBonus": 0.3033115238755474,
+    "threatPenalty": 0
   },
-  "fitness": 0,
-  "gamesPlayed": 0,
-  "wins": 0,
-  "losses": 0,
-  "draws": 0
+  "fitness": 0.9425287356321839,
+  "generation": 26,
+  "id": "seed"
 }
