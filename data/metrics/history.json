@@ -3686,5 +3686,45 @@
       "depthBonus": 0.3033115238755474,
       "threatPenalty": 0.093086080045421
     }
+  },
+  {
+    "generation": 27,
+    "timestamp": "2026-03-25T01:32:46.647360+00:00",
+    "bestFitness": 0.7126436781609196,
+    "meanFitness": 0.5582441120253671,
+    "worstFitness": 0.19047619047619047,
+    "drawRate": 0.03636363636363636,
+    "avgMoveCount": 34.15022727272727,
+    "wallClockTime_ms": 2062685.7362499577,
+    "gamesPlayed": 5060,
+    "bestWeights": {
+      "centreBonus": 2.627436048943782,
+      "three": 6.056863533168523,
+      "two": 1.1898910219416543,
+      "win": 135.27693614772767,
+      "terminalWin": 1000000,
+      "depthBonus": 0.32631990826971674,
+      "threatPenalty": 0.017760508911139755
+    }
+  },
+  {
+    "generation": 27,
+    "timestamp": "2026-03-25T01:49:07.248649+00:00",
+    "bestFitness": 0.75,
+    "meanFitness": 0.5535805929980542,
+    "worstFitness": 0.22988505747126436,
+    "drawRate": 0.056818181818181816,
+    "avgMoveCount": 34.63181818181818,
+    "wallClockTime_ms": 470667.8095420357,
+    "gamesPlayed": 5060,
+    "bestWeights": {
+      "centreBonus": 2.627436048943782,
+      "three": 4.529394618206572,
+      "two": 1.1898910219416543,
+      "win": 200,
+      "terminalWin": 1000000,
+      "depthBonus": 0.3033115238755474,
+      "threatPenalty": 0
+    }
   }
 ]

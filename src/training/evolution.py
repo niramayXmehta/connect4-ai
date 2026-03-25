@@ -18,6 +18,7 @@ _DEFAULTS = {
     'search_depth':       4,    # fixed at 4 during training; use 6 for interactive play
     'generations':      100,
     'num_anchors':        3,    # fixed random-bot opponents added to each tournament
+    'workers':            5,    # parallel worker processes for tournament (1 = sequential)
 }
 
 
@@ -76,7 +77,9 @@ def evolve(opts=None):
         gen_start = time.perf_counter()
 
         # 1. Tournament (anchors included for baseline signal)
-        all_ranked = tournament(population + anchors, games_per_pair=cfg['games_per_matchup'])
+        all_ranked = tournament(population + anchors,
+                                games_per_pair=cfg['games_per_matchup'],
+                                workers=cfg['workers'])
 
         games_this_gen = sum(b['games_played'] for b in all_ranked) // 2
         total_games += games_this_gen
@@ -157,7 +160,7 @@ def evolve(opts=None):
 # ─── Population helpers ───────────────────────────────────────────────────────
 
 def _make_bot(bot_id, generation, weights, depth):
-    return {'id': bot_id, 'generation': generation, 'weights': weights,
+    return {'id': bot_id, 'generation': generation, 'weights': weights, 'depth': depth,
             'fn': make_minimax_bot(depth, weights)}
 
 

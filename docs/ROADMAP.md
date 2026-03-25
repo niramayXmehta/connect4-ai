@@ -78,12 +78,22 @@ Milestone: training runs ~5x faster.
 - [ ] save best model as models/best_model.pt
 - [ ] (optional) export to ONNX for use in Node.js
 
-## Future — Bot viewer UI
+## Bot Viewer UI
 
-A separate browser UI where you can:
-- select two bots from your data/ directory
-- watch them play a game with moves animated
-- see per-move heatmaps and scores
-- track head-to-head stats
+A browser-based viewer where you can watch two trained bots play each other in real time.
 
-This builds on the existing game UI from the browser project.
+Features:
+- Load any two bot weight files from data/weights/ directory
+- Watch them play move by move in the existing Connect 4 UI
+- Heatmap showing each bot's column scores on their turn
+- Speed control: slow / normal / fast
+- Game stats: winner, move count, which weights were used
+- Head-to-head record if multiple games are played
+
+Implementation plan:
+- Add a bot loader to the browser game that reads a .json weight file
+- Add Bot vs Bot mode to game.js alongside the existing human vs AI mode
+- The weight files are plain JSON so the browser can load them directly
+- Build on top of the existing game UI — no new framework needed
+
+This milestone sits after Phase C so there are interesting (MCTS vs evolved minimax) matchups to watch.

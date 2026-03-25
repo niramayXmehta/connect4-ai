@@ -1,8 +1,12 @@
 # Round-robin tournament: every bot in the population plays every other bot.
-from .runner import run_game
+import multiprocessing
+from .worker import run_matchup
+
+# Fallback depth when a bot dict has no 'depth' key (e.g. random-bot anchors).
+_DEFAULT_DEPTH = 4
 
 
-def tournament(population, games_per_pair=10):
+def tournament(population, games_per_pair=10, workers=5):
     """
     Run a full round-robin tournament over `population`.
 
@@ -12,9 +16,11 @@ def tournament(population, games_per_pair=10):
     fitness formula:
         fitness = wins / (wins + losses + draws * 0.5)
 
-    population: list of dicts with keys 'id' and 'fn'
-    Returns: population sorted by fitness descending, each bot augmented with
-        wins, losses, draws, games_played, fitness, avg_move_count
+    population: list of dicts with keys 'id', 'weights' (None → random bot),
+                and optionally 'depth'.
+    workers:    number of parallel worker processes (1 = sequential).
+    Returns:    population sorted by fitness descending, each bot augmented with
+                wins, losses, draws, games_played, fitness, avg_move_count.
     """
     # Per-bot accumulators keyed by id
     acc = {
@@ -22,33 +28,42 @@ def tournament(population, games_per_pair=10):
         for b in population
     }
 
-    # All unique ordered pairs
+    # Build one matchup spec per unique pair
+    matchups = []
     for i in range(len(population)):
         for j in range(i + 1, len(population)):
             a = population[i]
             b = population[j]
-            sa = acc[a['id']]
-            sb = acc[b['id']]
+            matchups.append({
+                'bot_a_id':  a['id'],
+                'bot_b_id':  b['id'],
+                'weights_a': a.get('weights'),
+                'weights_b': b.get('weights'),
+                'depth_a':   a.get('depth', _DEFAULT_DEPTH),
+                'depth_b':   b.get('depth', _DEFAULT_DEPTH),
+                'games':     games_per_pair,
+            })
 
-            for g in range(games_per_pair):
-                result = run_game(a['fn'], b['fn'], bot_a_goes_first=(g % 2 == 0))
-                winner = result['winner']
-                moves  = result['moves']
+    # Run matchups — parallel or sequential
+    if workers > 1 and matchups:
+        with multiprocessing.Pool(workers) as pool:
+            results = pool.map(run_matchup, matchups)
+    else:
+        results = [run_matchup(m) for m in matchups]
 
-                if winner == 'A':
-                    sa['wins']   += 1
-                    sb['losses'] += 1
-                elif winner == 'B':
-                    sa['losses'] += 1
-                    sb['wins']   += 1
-                else:
-                    sa['draws'] += 1
-                    sb['draws'] += 1
+    # Aggregate results into per-bot accumulators
+    for r in results:
+        sa = acc[r['bot_a_id']]
+        sb = acc[r['bot_b_id']]
 
-                sa['total_moves'] += moves
-                sb['total_moves'] += moves
-                sa['game_count']  += 1
-                sb['game_count']  += 1
+        sa['wins']   += r['wins_a'];  sb['wins']   += r['wins_b']
+        sa['losses'] += r['wins_b'];  sb['losses'] += r['wins_a']
+        sa['draws']  += r['draws'];   sb['draws']  += r['draws']
+
+        total_moves = sum(r['move_counts'])
+        game_count  = len(r['move_counts'])
+        sa['total_moves'] += total_moves;  sb['total_moves'] += total_moves
+        sa['game_count']  += game_count;   sb['game_count']  += game_count
 
     # Attach stats and fitness to each bot, then sort best-first
     ranked = []
