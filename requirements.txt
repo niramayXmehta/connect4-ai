@@ -1,4 +1,4 @@
 matplotlib
-# Phase B dependencies (not yet required):
-# torch
-# numpy
+torch
+numpy
+tqdm
