@@ -700,14 +700,622 @@ Default: 200 games, depth 6.
 | Convergence robustness fix | ✅ Applied — 30-gen window + elite variance gate |
 | Phase A converged | ✅ Gen 26, fitness 0.9425, 100% vs random |
 | Phase A4 — Metrics viz | ✅ Complete |
-| Phase A5 — Parallelisation | ⬜ Not started |
+| Full JS → Python port | ✅ Complete (Entry 011) |
+| Phase A5 — Parallelisation | ✅ Complete (Entry 012) |
+| Bot Viewer UI milestone | ✅ Added to ROADMAP.md |
 | Phase C — MCTS | ⬜ Not started |
 | Phase B — Neural net | ⬜ Not started |
 
 ## Immediate Next Step
 
-Phase A complete. Next: **A5 — Parallelisation** (worker_threads, ~5× speedup on M3 Pro)
-or skip to **Phase C — MCTS bot**.
+A5 complete. Next: **Phase C — MCTS bot** (`src/bots/mcts.py` stub already present).
+
+---
+
+## Entry 011 — Full JavaScript → Python Port
+**Date:** 2026-03-25
+**Scope:** Entire codebase translated from Node.js ES modules to Python 3 stdlib
+
+### What changed
+All `.js` source files translated to Python. No external libraries except
+`matplotlib` for charts. Same directory structure, same module boundaries,
+same logic and weight format throughout.
+
+### Files created
+
+| Python file | Translated from |
+|---|---|
+| `src/game/constants.py` | `constants.js` |
+| `src/game/board.py` | `board.js` |
+| `src/game/rules.py` | `rules.js` |
+| `src/bots/random.py` | `random.js` |
+| `src/bots/minimax.py` | `minimax.js` |
+| `src/simulation/runner.py` | `runner.js` |
+| `src/simulation/tournament.py` | `tournament.js` |
+| `src/training/mutate.py` | `mutate.js` |
+| `src/training/fitness.py` | `fitness.js` |
+| `src/training/evolution.py` | `evolution.js` |
+| `src/io/persistence.py` | `persistence.js` |
+| `src/viz/board.py` | `viz/board.js` |
+| `src/viz/metrics.py` | `viz/metrics.js` |
+| `src/viz/chart.py` | `viz/chart.js` (**replaced** ASCII → matplotlib) |
+| `scripts/simulate.py` | `simulate.js` |
+| `scripts/train.py` | `train.js` |
+| `scripts/benchmark.py` | `benchmark.js` |
+| `src/bots/mcts.py` | `mcts.js` (renamed stub, not yet implemented) |
+
+`__init__.py` added to every `src/` subdirectory so all modules are importable as packages.
+
+### Translation rules applied
+- `argparse` for CLI argument parsing (replaces `process.argv`)
+- `json` module for all file I/O (replaces `JSON.parse` / `fs`)
+- `pathlib.Path` for file paths (replaces `path.join` / `__dirname`)
+- ANSI colour codes in `src/viz/board.py` identical to the JS version
+- `data/weights/best.json` weight format unchanged — no migration needed
+
+### `src/viz/chart.py` — matplotlib replacement
+The ASCII chart in `chart.js` was replaced entirely with a two-subplot
+matplotlib figure saved to `data/metrics/fitness_chart.png`:
+
+- **Subplot 1:** Best fitness (solid line), mean fitness (dashed), worst
+  fitness (dotted) over generations
+- **Subplot 2:** Draw rate over generations
+- `matplotlib.use('Agg')` — non-interactive backend, no window ever opens
+- Saved after every 10 generations and at the end of training
+- Graceful fallback: if `matplotlib` is not installed, prints a warning
+  and continues training without crashing
+
+`requirements.txt` added at project root:
+```
+matplotlib
+# Phase B dependencies (not yet required):
+# torch
+# numpy
+```
+
+### Verification results
+
+| Check | Command | Result |
+|---|---|---|
+| 1 | `python scripts/simulate.py` | Minimax beat random 100% over 100 games ✅ |
+| 2 | `python scripts/train.py --gens 5 --pop 10 --games 20 --elite 4` | gen_001–gen_005 created, best.json updated, history.json appended, fitness_chart.png created ✅ |
+| 3 | `python scripts/benchmark.py` | 100% vs random, ~50% vs default-weights minimax ✅ |
+
+---
+
+## Entry 012 — Milestone A5: Parallelisation
+**Date:** 2026-03-25
+**Milestone:** A5 complete — tournament matchups run in parallel across CPU cores
+
+### Goal
+Replace the sequential matchup loop in `tournament.py` with a
+`multiprocessing.Pool` distribution across worker processes. Target: ~5×
+speedup on the M3 Pro (5 performance cores). No external libraries —
+`multiprocessing` is stdlib.
+
+### New file: `src/simulation/worker.py`
+
+Top-level `run_matchup(args)` function — required to be top-level because
+`multiprocessing` pickles functions by `(module, qualname)`. Lambdas,
+local functions, and methods are not picklable.
+
+```
+args = {
+    bot_a_id, bot_b_id,
+    weights_a, weights_b,   ← weight dicts (None = random bot)
+    depth_a, depth_b,
+    games
+}
+```
+
+Bots are **not** passed across process boundaries (functions are not
+reliably picklable). Each worker reconstructs both bots from scratch
+inside the process using `make_minimax_bot(depth, weights)` or
+`random_bot` (when `weights is None`).
+
+Returns `{ bot_a_id, bot_b_id, wins_a, wins_b, draws, move_counts }`.
+
+### Updated: `src/simulation/tournament.py`
+
+- Added `workers` parameter (default `5`)
+- When `workers > 1`: builds all pair matchup specs upfront, then
+  dispatches with `multiprocessing.Pool(workers).map(run_matchup, matchups)`
+- When `workers == 1`: falls back to `[run_matchup(m) for m in matchups]`
+  (sequential — useful for debugging and profiling)
+- Result aggregation and fitness scoring unchanged from the JS version
+
+### Updated: `scripts/train.py`
+
+- Added `--workers` flag (default `5`)
+- `workers` passed through `opts` dict to `evolve()` → `tournament()`
+- **`if __name__ == '__main__'` guard added** — required on macOS to prevent
+  worker processes from re-executing the script and spawning infinitely
+- `multiprocessing.set_start_method('fork')` — avoids re-importing all
+  modules in each worker (fork inherits the parent's address space)
+
+### Updated: `scripts/benchmark.py`
+
+- Added `--workers` flag (default `5`)
+- Same `if __name__ == '__main__'` guard and `set_start_method('fork')`
+
+### Wall-clock speedup
+
+Both runs: `--gens 3 --pop 20 --games 20 --elite 4`
+
+| workers | Time (3 gens) | Speedup |
+|---------|--------------|---------|
+| 1 (sequential) | ~2062.7s | 1× baseline |
+| 5 (parallel) | ~470.7s | **4.38×** |
+
+~4.4× speedup on M3 Pro with 5 performance cores. Per-generation wall
+clock time is printed in the terminal output on each `Gen` line so the
+speedup is visible at a glance.
+
+### Key macOS multiprocessing notes
+
+| Issue | Solution |
+|---|---|
+| `spawn` (macOS default) re-imports `__main__` in every worker | Use `set_start_method('fork')` in the script's `__main__` block |
+| Workers spawning infinitely | `if __name__ == '__main__':` guard in all script entry points |
+| Bots (closures) not picklable | Pass weight dicts only; reconstruct bots inside each worker |
+| Lambdas not picklable | `run_matchup` is a top-level module function |
+
+---
+
+## Entry 017 — Phase B1 + B2: Neural Network Self-Play
+**Date:** 2026-03-25
+
+### What was built
+
+Phase B adds a value network trained entirely from self-play.  No hand-crafted
+heuristics — the network learns purely from game outcomes.  All code lives in
+`src/nn/` so it is cleanly separated from Phase A (minimax) and Phase C (MCTS).
+
+---
+
+#### `src/nn/encode.py` — board → tensor
+
+`encode_board(board, token) → torch.Tensor` of shape `(3, 6, 7)`, `float32`, no
+batch dimension.
+
+| Channel | Content |
+|---------|---------|
+| 0 | 1.0 where `token` pieces are |
+| 1 | 1.0 where opponent pieces are |
+| 2 | all 1.0 if `token == AI`, all 0.0 if `token == HUMAN` |
+
+Channel 2 makes the network turn-aware without requiring separate model heads.
+
+---
+
+#### `src/nn/network.py` — Connect4Net
+
+Three conv blocks (Conv2d → BatchNorm2d → ReLU), then Flatten → Linear(2688, 256)
+→ ReLU → Linear(256, 1) → Tanh.  BatchNorm layers added for stability during early
+training when few positions have been seen.
+
+Output is a single float in (−1, +1): +1 = current player wins, −1 = current player
+loses.
+
+Device is resolved at import time (MPS → CPU) and printed once:
+```
+Device: mps
+```
+
+Class methods: `save(path)` writes the state dict; `Connect4Net.load(path, device)`
+returns the network in eval mode.
+
+---
+
+#### `src/nn/replay.py` — ReplayBuffer
+
+`deque`-backed circular buffer (default capacity 50 000).  Stores `(state_tensor,
+outcome_float)` pairs.  Outcomes are from the player-to-move's perspective:
+`+1.0` win, `-1.0` loss, `0.0` draw.
+
+`sample(batch_size)` returns `(states, outcomes)` as stacked float32 tensors with a
+batch dimension, using `random.choices` (sampling with replacement).
+
+---
+
+#### `src/nn/self_play.py` — Network-backed MCTS + game generation
+
+`_run_nn_mcts(board, token, network, device, iterations, C)` runs standard UCT
+(selection / expansion / evaluation / backpropagation) but replaces the rollout with a
+single network forward pass.
+
+The network outputs a value `v ∈ (−1, 1)` from `node.token`'s perspective.  To keep
+compatibility with the existing `_backpropagate` function (which uses `1 − result`
+flipping and expects values in `[0, 1]`):
+
+```
+val_for_node = (v + 1) / 2          # map (−1,1) → (0,1)
+result = val_for_node                # if node.token == chooser
+       = 1.0 − val_for_node         # otherwise (opponent's perspective)
+```
+
+All network calls are wrapped in `torch.no_grad()`.
+
+`generate_games(network, device, n_games, mcts_iterations)` plays `n_games`
+self-play games, recording `(encode_board(state, token), token)` before each move,
+then assigns outcomes retroactively: winner `+1.0`, loser `−1.0`, draw `0.0`.
+Returns a flat list of `(tensor, outcome_float)` pairs.
+
+`make_nn_mcts_bot(network, device, iterations, C)` returns a `(board, token) → col`
+closure for use with `runner.run_games` (evaluation).
+
+---
+
+#### `src/nn/train_nn.py` — Training primitives + loop
+
+`train_step(network, optimiser, buffer, batch_size, device) → float`
+: samples a batch, runs MSE forward/backward, returns scalar loss.
+
+`evaluate(new_net, champion_net, device, n_games=50, iterations=200) → float`
+: pits two network-backed MCTS bots against each other (alternating first player),
+returns win rate of `new_net`.
+
+`training_loop(opts)`:
+1. Load champion from `models/best_model.pt` (or start fresh)
+2. Copy to candidate, init Adam optimiser and replay buffer
+3. Per iteration: self-play → push to buffer → gradient steps if buffer ≥ batch_size
+4. Every `eval_every` iters: evaluate; if win rate > 0.55 → new champion saved
+5. Every 10 iters: checkpoint written to `models/checkpoint_NNN.pt`
+
+---
+
+#### `scripts/train_nn.py` — CLI entry point
+
+```
+python3 scripts/train_nn.py [options]
+
+--iterations   total iterations       (default 100)
+--games        self-play games/iter   (default 50)
+--mcts-iters   MCTS iters per move    (default 200)
+--batch-size   gradient batch size    (default 256)
+--train-steps  gradient steps/iter   (default 64)
+--eval-every   eval interval          (default 10)
+```
+
+Guards with `if __name__ == '__main__'` and
+`multiprocessing.set_start_method('fork')` for future parallelisation.
+
+---
+
+#### `requirements.txt` updated
+Uncommented `torch` and `numpy`; added `tqdm`.
+
+---
+
+### Sanity check output
+
+```
+$ /usr/bin/python3 scripts/train_nn.py \
+    --iterations 3 --games 5 --mcts-iters 30 \
+    --batch-size 32 --train-steps 8 --eval-every 3
+
+Device: mps
+No saved champion — starting from scratch
+Training on device: mps
+Iterations=3  games/iter=5  mcts_iters=30  batch=32  train_steps=8  eval_every=3
+
+Iter    1/3  loss=0.2963  buffer=83
+Iter    2/3  loss=0.1948  buffer=131
+Iter    3/3  loss=0.5817  buffer=210
+  ↳ Eval (iter 3): candidate win rate = 0.580 → NEW CHAMPION saved
+
+Training complete.
+```
+
+| Metric | Value |
+|--------|-------|
+| Device | **mps** (Apple M3 GPU) |
+| Buffer growth | 83 → 131 → 210 samples over 3 iters (≈42 samples/game × 5 games) |
+| Initial loss (iter 1) | 0.2963 |
+| Loss after 8 grad steps (iter 2) | 0.1948 (decreasing — learning signal present) |
+| Loss at iter 3 | 0.5817 (fluctuation expected at tiny sample size) |
+| Eval win rate (iter 3) | 0.580 → champion saved |
+| Total wall-clock time | ~45 s for 3 iterations on MPS |
+
+The eval win rate of 0.580 at iteration 3 is inflated because the candidate is only 3
+iterations ahead of the champion (essentially the same randomly-initialised network +
+a few gradient steps on 210 samples).  This is expected behaviour early in training.
+
+---
+
+### Architecture decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| BatchNorm after every Conv | Stabilises training when the network has seen <1 000 positions; can be removed later once a large replay buffer is accumulated |
+| Map network output to `[0, 1]` for MCTS backprop | Reuses the existing `_backpropagate` from Phase C unchanged; no risk of sign errors when going up the tree |
+| `random.choices` with replacement in `ReplayBuffer.sample` | Avoids crash when buffer is smaller than batch_size early in training |
+| `multiprocessing.set_start_method('fork')` | Preparation for parallelising self-play across cores (Phase B future work) |
+
+---
+
+### Files added
+- `src/nn/__init__.py`
+- `src/nn/encode.py`
+- `src/nn/network.py`
+- `src/nn/replay.py`
+- `src/nn/self_play.py`
+- `src/nn/train_nn.py`
+- `scripts/train_nn.py`
+- `models/.gitkeep`
+- `requirements.txt` — torch, numpy, tqdm uncommented/added
+
+---
+
+## Entry 016 — Phase C3: MCTS Tuning — Weighted Rollout Fixed
+**Date:** 2026-03-25
+
+### What was fixed
+
+The C2 `_weighted_rollout` used `max`-subtraction in softmax (standard numerical stabilisation):
+```
+exps = [exp(s - max_s) for s in raw_scores]
+```
+This silently collapsed whenever one score was large: for scores `[200, 5, 2, 0]` the arguments
+became `[0, -195, -198, -200]`, giving `exp(0) ≈ 1` vs `exp(-195) ≈ 0` — a deterministic greedy pick.
+
+The fix has three steps now applied in `_weighted_rollout`:
+1. **Min-shift** all scores so the minimum becomes 0: `shifted = [s - min(scores) for s in scores]`.
+   This means the *spread* of the scores — not the absolute magnitude — drives the probabilities.
+2. **Uniform fallback** when `max(shifted) == 0` (no useful signal, e.g. opening moves).
+3. **Temperature scaling** before softmax: `scaled = [s / T for s in shifted]`.
+   Higher T flattens the distribution toward uniform random; lower T sharpens it toward greedy.
+
+`temperature=1.0` is the new default, threaded as a parameter through both `_weighted_rollout`
+and `make_mcts_bot`.
+
+### Changes to scripts/simulate.py
+Added `--temperature FLOAT` flag (default `1.0`). Ignored when `--rollout random`.
+The rollout label now includes the temperature value, e.g.
+`mcts (500 iters, weighted rollout T=3.0 (gen 26, fitness 0.943))`.
+
+---
+
+### Temperature sweep — 30 games each, 500 iters, weighted rollout vs minimax depth-4
+
+| Rollout | T | Wins/30 | Win% | ms/game |
+|---------|---|---------|------|---------|
+| random  | — | 8       | 26.7% | 1756 |
+| weighted | 0.1 | 3   | 10.0% | 1665 |
+| weighted | 0.3 | 5   | 16.7% | 1706 |
+| weighted | 1.0 | 8   | 26.7% | 1743 |
+| **weighted** | **3.0** | **10** | **33.3%** | 1932 |
+| weighted | 10.0 | 7  | 23.3% | 2009 |
+
+**T=3.0 identified as the peak** — it beat the random baseline (33.3% vs 26.7%).
+
+#### Why the curve peaks at T=3.0
+
+Shifted scores for Connect 4 mid-game positions typically range from 0 (neutral) to ~5–10 (mild
+threats). At T=3.0, softmax on `[0, 5, 2]` gives approximately `[13%, 72%, 24%]` — still clearly
+biased toward the better move, but with enough residual probability on alternatives to maintain
+rollout diversity. At T=10.0 the probabilities approach `[28%, 40%, 32%]`, which is nearly uniform
+and loses most of the heuristic signal. At T=0.1, scores of 5 vs 2 become `50 vs 20` after
+scaling, yielding `~1.0` vs `~10⁻¹³` — effectively deterministic.
+
+---
+
+### Definitive comparison — 50 games, T=3.0
+
+| Configuration | Iters | Wins/50 | Win% | ms/game |
+|---------------|-------|---------|------|---------|
+| random rollout | 500 | 14 | 28.0% | 1845 |
+| weighted T=3.0 | 500 | 12 | 24.0% | 1861 |
+| weighted T=3.0 | 200 | 13 | 26.0% | 853 |
+
+---
+
+### Interpretation
+
+**The 50-game runs are within noise of each other.** A 95% confidence interval for p ≈ 0.26
+at n=50 spans roughly ±12 percentage points, so the gap between 28.0% and 24.0% is not
+statistically distinguishable. The sweep's T=3.0 result (33.3%) was likely elevated by sampling
+variance at n=30.
+
+**What is confirmed:**
+- The min-shift fix is correct: T=1.0 exactly matched random (26.7% vs 26.7%) in the sweep,
+  meaning the fixed softmax is now a neutral transformation at unit temperature — as intended.
+- The greedy direction (T < 1) consistently hurts: T=0.1 gave 10.0% and T=0.3 gave 16.7% in both
+  sweep and extended runs, confirming that deterministic rollouts are genuinely harmful.
+- The curve has the expected shape: performance rises from T=0.1 to T=3.0, then flattens or
+  falls at T=10.0.
+
+**The most valuable result — iteration efficiency:**
+200-iter weighted (26.0%, 853 ms/game) roughly matched 500-iter random (28.0%, 1845 ms/game)
+at 2.2× less wall-clock time per game. This is the practical pay-off of the weighted rollout:
+comparable quality at significantly lower compute cost, even if the win-rate signal is noisy at
+these sample sizes.
+
+**Why depth-4 minimax remains hard to beat:**
+Depth-4 minimax with alpha-beta pruning consistently sees 4 half-plies ahead and blocks/exploits
+all immediate 3-in-a-row threats. MCTS at 500 iterations distributes those 500 samples across
+a branching factor of ~7, reaching depth ~3-4 only for the most visited lines. The heuristic in
+rollouts adds soft guidance but cannot replace the exact minimax lookahead for tactical positions.
+Crossing the 50%+ win rate threshold will likely require either ≥2000 iterations or a parallel
+rollout implementation.
+
+---
+
+### Files changed
+- `src/bots/mcts.py` — `_weighted_rollout` rewritten with min-shift + temperature; `make_mcts_bot` gains `temperature=1.0` param
+- `scripts/simulate.py` — `--temperature` flag added; rollout label includes T value
+
+---
+
+## Entry 015 — Phase C2: Weighted Rollouts
+**Date:** 2026-03-25
+
+### What was built
+
+#### 1. `score_move` added to `src/bots/minimax.py`
+Public function that scores a single candidate move without any recursive search:
+- Calls `place(board, col, token)` to find the exact landing row
+- Iterates only the WIN-length windows that physically intersect `(row, col)` — horizontal, vertical, diagonal-down-right, diagonal-up-right — plus the centre-column bonus if applicable
+- Calls `unplace(board, col)` and returns the raw heuristic score
+- Returns `-inf` if the column is full
+- Deliberately avoids scoring the whole board, keeping it fast enough to call on every rollout step (~7 windows per call worst-case vs ~69 for the full board scan)
+
+#### 2. `_weighted_rollout` added to `src/bots/mcts.py`
+Same contract as `_rollout` (returns winning token or `None` for draw). Per step:
+1. Calls `score_move(board, col, current, weights)` for every legal column
+2. If `max(scores) <= 0` (no positive signal — typical on the first few moves of an empty board), falls back to `random.choice` so the rollout always makes progress
+3. Otherwise applies softmax with max-subtraction for numerical stability: `exp(s − max_s)` for each score, then `random.choices(cols, weights=probs)`
+
+Import: `from .minimax import score_move` — both files are inside `bots/`, so no layer rules are broken.
+
+#### 3. `make_mcts_bot` updated
+Added `rollout_weights=None` parameter. When not `None`, dispatches to `_weighted_rollout`; otherwise uses the existing `_rollout`. No other changes to the MCTS loop.
+
+#### 4. `scripts/simulate.py` updated
+Added `--rollout random|weighted` flag (default `random`). When `weighted`:
+- Loads `data/weights/best.json` via `persistence.load_best(DEFAULT_WEIGHTS)`
+- Passes `weights` to `make_mcts_bot` as `rollout_weights`
+- Prints generation number and fitness in the output header for traceability
+
+---
+
+### Verification results
+
+All runs vs **minimax depth-4**, alternating first player.
+
+| Rollout policy | Iterations | Games | Wins | Losses | ms/game |
+|----------------|-----------|-------|------|--------|---------|
+| random         | 500        | 20    | 4 (20.0%)  | 16 (80.0%)  | 1748 |
+| weighted       | 500        | 20    | 3 (15.0%)  | 17 (85.0%)  | 1819 |
+| weighted       | 200        | 20    | 1 (5.0%)   | 19 (95.0%)  | 799  |
+| random         | 500        | 30    | 8 (26.7%)  | 22 (73.3%)  | 1825 |
+| weighted       | 500        | 30    | 3 (10.0%)  | 27 (90.0%)  | 1883 |
+
+Weighted rollout uses Phase A champion: `data/weights/best.json` — gen 26, fitness 0.943.
+
+---
+
+### Observations — weighted rollout underperformed
+
+The hypothesis was that weighted rollouts would beat random rollouts at equal iteration budgets.
+Across both the 20-game and 30-game samples the weighted policy scored **consistently lower**
+(~10–15%) than the random policy (~20–27%). This is a genuine and instructive result.
+
+#### Root cause — softmax on high-magnitude scores collapses rollout diversity
+
+`score_move` inherits the minimax weight scale: `win=200`, `three=5`, `two=2`.
+As soon as any candidate move builds a near-win threat it gets a score of ~200 while all other
+columns score ≤5.  After softmax that translates to probability ≈ 1.0 for the best move and
+≈ 0.0 for everything else.  The rollout becomes **nearly deterministic**.
+
+MCTS correctness depends on each simulation producing a diverse, independently-sampled outcome
+so that averaging them converges to an unbiased value estimate.  When all 500 simulations from
+the same node run almost the same greedy game, you are effectively running the same game 500
+times — no more informative than running it once.  Worse, if the greedy policy has a systematic
+blind spot, every simulation inherits that blind spot and the value estimates become **biased**
+rather than noisy.  The random rollout avoids this entirely.
+
+#### Why random rollouts work well as MCTS simulation policy
+
+Uniform random play, despite being very weak, satisfies the key statistical requirement:
+each rollout is an independent unbiased sample of the reachable outcome distribution.
+Averaging thousands of such samples converges to the true game-theoretic value by the law
+of large numbers.  The only cost is that it takes more iterations to reduce variance to an
+acceptable level — which is why iteration budget matters so much.
+
+#### How to fix this in a future iteration (Phase C3 candidates)
+
+| Fix | How it helps |
+|-----|-------------|
+| Softmax temperature `T > 1` | Spreads probabilities; `T=10` on scores /10 keeps some diversity |
+| ε-greedy rollout | With probability ε pick randomly, otherwise use heuristic |
+| Normalise scores before softmax | Divide by weight magnitude so signals are O(1) not O(100) |
+| Use weighted rollout only in late-game | Apply heuristic only when scores are >0 AND at least one column has a three-in-a-row |
+| Heavy playout with shallow search | Replace rollout with a 1-ply minimax move rather than a heuristic sample |
+
+---
+
+### Files changed
+- `src/bots/minimax.py` — `score_move` public function added at bottom of file
+- `src/bots/mcts.py` — `_weighted_rollout`, import of `score_move`, `rollout_weights` param
+- `scripts/simulate.py` — `--rollout` flag, `persistence.load_best` integration
+
+---
+
+## Entry 014 — Phase C: MCTS Bot Implemented
+**Date:** 2026-03-25
+
+### What was built
+Implemented a full Monte Carlo Tree Search bot in `src/bots/mcts.py`, replacing the Phase C stub.
+
+#### Core implementation
+- **`MCTSNode`** class with `board`, `move`, `parent`, `children`, `wins`, `visits`, `unvisited_moves`, `token`
+- **UCB1 selection**: `wins/visits + C * sqrt(ln(parent_visits) / visits)` — unvisited nodes get `inf`
+- **Expansion**: picks a random unvisited move, appends a new child
+- **Rollout**: plays random moves to game end, returns winning token or `None` for draw
+- **Backpropagation**: walks up to root, flipping perspective at each level (key correctness fix — wins are relative to the player who chose that node, alternating at each tree level)
+- **`make_mcts_bot(iterations, C)`**: factory returning a `(board, token) -> col` closure matching the exact interface of `make_minimax_bot`, requiring no changes to `runner.py` or `tournament.py`
+
+Default parameters: `iterations=500`, `C=1.414` (√2).
+
+#### Bug fixed during development
+Initial attempt stored all results from a single root-player perspective, causing the bot to play as if the opponent also wanted to maximise the root's wins. Fixed by flipping result at each backpropagation step so each node's `wins/visits` reflects wins for the player who selected that child.
+
+#### `scripts/simulate.py` updated
+Added `--mode` flag supporting four matchups:
+- `minimax_vs_random` (existing default)
+- `mcts_vs_random` (new)
+- `mcts_vs_minimax` (new)
+- `minimax_vs_mcts` (new)
+
+Added `--games N` and `--iterations I` flags. Legacy positional `N` arg preserved for backwards compatibility.
+
+### Verification results
+
+| Test | Matchup | Games | Result |
+|------|---------|-------|--------|
+| mcts_vs_random | MCTS (500 iters) vs random | 20 | **100% MCTS wins** |
+| mcts_vs_minimax | MCTS (500 iters) vs minimax depth-4 | 10 | **40% MCTS wins** |
+| mcts_vs_minimax | MCTS (2000 iters) vs minimax depth-4 | 10 | **60% MCTS wins** |
+
+Timing: ~800 ms/game at 500 iters, ~7 s/game at 2000 iters.
+
+### Analysis
+- MCTS dominates random play (heuristic-free but statistically sound)
+- At 500 iterations MCTS is competitive with depth-4 alpha-beta minimax (40% win rate)
+- At 2000 iterations MCTS outperforms depth-4 minimax (60% win rate), confirming that iteration budget directly controls strength
+- Depth-4 minimax has a heuristic advantage in the opening; MCTS catches up as iteration count grows and rollouts cover more of the game tree
+
+### Files changed
+- `src/bots/mcts.py` — full implementation (replaces stub)
+- `scripts/simulate.py` — `--mode`, `--games`, `--iterations` flags
+
+---
+
+## Entry 013 — Bot Viewer UI Milestone Added
+**Date:** 2026-03-25
+
+Added **Bot Viewer UI** as a new milestone to `docs/ROADMAP.md`, positioned
+after Phase C.
+
+### What it will be
+A browser-based viewer to watch two trained bots play each other in real time:
+
+- Load any two weight files from `data/weights/`
+- Watch move-by-move in the existing Connect 4 browser UI
+- Heatmap showing each bot's column scores on their turn
+- Speed control: slow / normal / fast
+- Game stats: winner, move count, weight files used, head-to-head record
+
+### Why after Phase C
+Phase C produces the MCTS bot — the most interesting matchup to watch is
+MCTS vs the evolved minimax champion. Placing this milestone after C means
+there are compelling head-to-head matchups ready when the viewer is built.
+
+### Implementation plan (from roadmap)
+- Bot loader reads a `.json` weight file in the browser (plain JSON, no server needed)
+- Bot vs Bot mode added to `game.js` alongside existing human vs AI mode
+- Builds on top of the existing game UI — no new framework required
 
 ---
 

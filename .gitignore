@@ -3,3 +3,7 @@ node_modules/
 data/logs/*.log
 data/weights/gen_*.json
 *.log
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

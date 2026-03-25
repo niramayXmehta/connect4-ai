@@ -180,3 +180,60 @@ def _ordered_cols(cols):
     """
     mid = COLS // 2
     return sorted(cols, key=lambda c: abs(c - mid))
+
+
+# ---------------------------------------------------------------------------
+# Public utility used by MCTS weighted rollouts
+# ---------------------------------------------------------------------------
+
+def score_move(board, col, token, weights):
+    """
+    Score a single candidate move without recursion.
+
+    Places token in col, evaluates all WIN-length windows that intersect
+    the cell where the token lands, unplaces, and returns the raw heuristic
+    score.  Scoring only the intersecting windows (rather than the full board)
+    keeps this fast enough to call on every rollout step.
+
+    Returns -inf if the column is full.
+    """
+    row = place(board, col, token)
+    if row == -1:
+        return -math.inf  # column already full
+
+    opponent = HUMAN if token == AI else AI
+    score = 0
+
+    # Centre-column bonus: apply if the landing cell is in the centre column.
+    mid = COLS // 2
+    if col == mid:
+        score += weights['centreBonus']
+
+    # Collect every WIN-length window that passes through (row, col).
+
+    # Horizontal — row fixed, c_start varies.
+    for c_start in range(max(0, col - WIN + 1), min(COLS - WIN, col) + 1):
+        window = [board[row][c_start + i] for i in range(WIN)]
+        score += _score_window(window, token, opponent, weights)
+
+    # Vertical — col fixed, r_start varies.
+    for r_start in range(max(0, row - WIN + 1), min(ROWS - WIN, row) + 1):
+        window = [board[r_start + i][col] for i in range(WIN)]
+        score += _score_window(window, token, opponent, weights)
+
+    # Diagonal down-right (\): window starts at (row-k, col-k).
+    for k in range(WIN):
+        rs, cs = row - k, col - k
+        if 0 <= rs <= ROWS - WIN and 0 <= cs <= COLS - WIN:
+            window = [board[rs + i][cs + i] for i in range(WIN)]
+            score += _score_window(window, token, opponent, weights)
+
+    # Diagonal up-right (/): window starts at (row+k, col-k).
+    for k in range(WIN):
+        rs, cs = row + k, col - k
+        if WIN - 1 <= rs < ROWS and 0 <= cs <= COLS - WIN:
+            window = [board[rs - i][cs + i] for i in range(WIN)]
+            score += _score_window(window, token, opponent, weights)
+
+    unplace(board, col)
+    return score
