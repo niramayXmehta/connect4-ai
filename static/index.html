@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect4 AI Viewer</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section id="mode-screen" class="screen active">
+      <div class="hero">
+        <h1>Connect4 AI</h1>
+        <div class="mode-cards">
+          <button class="mode-card" data-mode="pvp">Player vs Player</button>
+          <button class="mode-card" data-mode="pvbot">Player vs Bot</button>
+          <button class="mode-card" data-mode="bvb">Bot vs Bot</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="setup-screen" class="screen">
+      <div class="panel setup-panel">
+        <h2 id="setup-title">Setup</h2>
+        <div id="setup-content"></div>
+      </div>
+    </section>
+
+    <section id="game-screen" class="screen">
+      <div class="top-bar">
+        <button id="back-button" class="secondary-button">Back</button>
+        <div id="move-counter">Move: 0</div>
+      </div>
+
+      <div class="game-layout">
+        <div class="board-column">
+          <div id="heatmap-panel" class="panel compact-panel">
+            <div class="panel-header">
+              <h3>Heatmap</h3>
+              <span class="panel-caption">Bot read</span>
+            </div>
+            <div id="heatmap" class="heatmap"></div>
+            <div class="index-row" id="heatmap-index"></div>
+          </div>
+
+          <div class="panel board-panel">
+            <div class="panel-header">
+              <h3>Board</h3>
+              <span class="panel-caption">Connect 4</span>
+            </div>
+            <div id="board" class="board"></div>
+            <div class="index-row" id="board-index"></div>
+          </div>
+        </div>
+
+        <div class="side-column">
+          <div class="panel status-panel">
+            <div class="panel-header">
+              <h3>Match State</h3>
+              <span id="winner-badge" class="winner-badge hidden">Win</span>
+            </div>
+            <div id="status-text">Red's turn</div>
+          </div>
+
+          <div id="controls-panel" class="panel controls-panel hidden">
+            <div class="panel-header">
+              <h3>Bot Controls</h3>
+              <span class="panel-caption">Autoplay</span>
+            </div>
+            <div class="control-row">
+              <button id="reset-button" class="secondary-button">Reset</button>
+              <button id="next-button" class="secondary-button">Next</button>
+              <button id="simulate-button" class="primary-button">Simulate</button>
+              <button id="pause-button" class="secondary-button">Pause</button>
+            </div>
+            <label class="slider-wrap" for="speed-slider">
+              <span>Speed</span>
+              <input id="speed-slider" type="range" min="0" max="4" step="1" value="2">
+              <span id="speed-label">1.0s</span>
+            </label>
+            <div id="record-text" class="record-text">Red: 0 Draws: 0 Yellow: 0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/game.js"></script>
+</body>
+</html>
