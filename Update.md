@@ -862,6 +862,201 @@ speedup is visible at a glance.
 
 ---
 
+## Entry 018 — Phase B: Enhanced Metrics, Charts, and Terminal Logging
+**Date:** 2026-03-25
+
+### What was added
+
+Three areas of improvement on top of the Phase B1+B2 foundation:
+terminal logging quality, structured JSON metrics, and a four-subplot training chart.
+
+---
+
+#### 1. Terminal logging — `src/nn/train_nn.py`
+
+**Startup header** — printed once before the first iteration:
+```
+╔══════════════════════════════════════════════╗
+║        Connect4 AI — Phase B Training        ║
+╚══════════════════════════════════════════════╝
+Device:       mps (Apple M3 GPU)
+Iterations:   5
+Games/iter:   5
+MCTS iters:   30
+Batch size:   32
+Train steps:  8
+Eval every:   3
+Ckpt every:   3
+──────────────────────────────────────────────
+```
+
+**Resume notice** (when `data/metrics/nn_history.json` exists):
+```
+Resuming from iteration 5 (last loss: 0.2806, buffer will reset)
+```
+
+**Per-iteration line** with zero-padded numbers and wall-clock time:
+```
+Iter 0001/0005 | loss:   0.1226 | buffer:     92 | games:      5 | 3.8s
+```
+
+**Eval block** — only on evaluation iterations, shows W/L/D explicitly:
+```
+── Eval @ iter 0003 ────────────────────────────
+  Candidate vs Champion: 23W / 26L / 1D  (46.0%)
+  → champion retained (threshold: 55.0%)
+──────────────────────────────────────────────
+  ✓ Checkpoint saved: models/checkpoint_003.pt
+```
+
+Or when promoted:
+```
+  → NEW CHAMPION saved to models/best_model.pt
+```
+
+**End-of-run summary:**
+```
+══════════════════════════════════════════════
+Training complete.
+Total iterations: 5  |  Total games: 25
+Best eval win rate: 0.460 (iter 0003)
+Final buffer size: 411
+Total wall time:   43.9s
+══════════════════════════════════════════════
+```
+
+`_format_duration(seconds)` renders `1h 23m 14s` / `4m 03s` / `43.9s` as appropriate.
+
+**Eval and checkpoint are now independent** — they each check `i % interval == 0` separately, so both fire on the same iteration without one suppressing the other (fixes a `continue`-based bug in the earlier version).
+
+---
+
+#### 2. Metrics tracking — `data/metrics/nn_history.json`
+
+After every iteration, `_append_nn_history(history, entry)` writes a JSON array entry:
+```json
+{
+  "iteration": 3,
+  "timestamp": "2026-03-25T15:43:52Z",
+  "loss": 0.122309,
+  "buffer_size": 253,
+  "games_played": 15,
+  "wall_clock_ms": 3042,
+  "eval_win_rate": 0.46,
+  "champion_updated": false
+}
+```
+`eval_win_rate` is `null` on non-eval iterations.  The file accumulates across runs:
+on resume, the history is loaded at startup and new entries are appended, so the full
+multi-session training curve is preserved in one file.
+
+`games_played` = `abs_iter × games_per_iter` (absolute across all sessions, so the
+field counts correctly even after resuming from a previous session).
+
+---
+
+#### 3. `src/nn/chart.py` — four-subplot training chart
+
+`save_nn_chart(history)` produces `data/metrics/nn_fitness_chart.png` — a 13×8-inch
+2×2 figure using the same Agg/non-interactive backend as `src/viz/chart.py`.
+
+| Subplot | Data |
+|---------|------|
+| Top-left | MSE loss over iterations (line; skips `null` entries) |
+| Top-right | Replay buffer size over iterations |
+| Bottom-left | Eval win rate — scatter+line on eval iterations only; dashed red line at 0.55 promotion threshold |
+| Bottom-right | Wall-clock time per iteration in seconds |
+
+Chart is saved after every evaluation and once more at the end of training.
+Gracefully skips with a warning if matplotlib is not installed.
+
+---
+
+#### 4. `scripts/train_nn.py` — `--checkpoint-every` flag
+
+New CLI flag (default `10`) controls the checkpoint interval independently of
+`--eval-every`.  Both flags accept any positive integer.
+
+---
+
+### Verification output (clean first run)
+
+```
+$ /usr/bin/python3 scripts/train_nn.py \
+    --iterations 5 --games 5 --mcts-iters 30 \
+    --batch-size 32 --train-steps 8 \
+    --eval-every 3 --checkpoint-every 3
+
+Device: mps
+╔══════════════════════════════════════════════╗
+║        Connect4 AI — Phase B Training        ║
+╚══════════════════════════════════════════════╝
+Device:       mps (Apple M3 GPU)
+Iterations:   5
+Games/iter:   5
+MCTS iters:   30
+Batch size:   32
+Train steps:  8
+Eval every:   3
+Ckpt every:   3
+──────────────────────────────────────────────
+Iter 0001/0005 | loss:   0.1226 | buffer:     92 | games:      5 | 3.8s
+Iter 0002/0005 | loss:   0.0875 | buffer:    161 | games:     10 | 2.0s
+Iter 0003/0005 | loss:   0.1223 | buffer:    253 | games:     15 | 3.0s
+── Eval @ iter 0003 ────────────────────────────
+  Candidate vs Champion: 23W / 26L / 1D  (46.0%)
+  → champion retained (threshold: 55.0%)
+──────────────────────────────────────────────
+  ✓ Checkpoint saved: models/checkpoint_003.pt
+Iter 0004/0005 | loss:   0.3689 | buffer:    318 | games:     20 | 2.0s
+Iter 0005/0005 | loss:   0.9908 | buffer:    411 | games:     25 | 2.6s
+
+══════════════════════════════════════════════
+Training complete.
+Total iterations: 5  |  Total games: 25
+Best eval win rate: 0.460 (iter 0003)
+Final buffer size: 411
+Total wall time:   43.9s
+══════════════════════════════════════════════
+```
+
+**Checklist:**
+- ✅ Header prints with `mps (Apple M3 GPU)` and all parameters
+- ✅ Per-iteration lines with loss, buffer, games, timing
+- ✅ Eval block prints at iter 3 (W/L/D + retention/promotion message)
+- ✅ Checkpoint message prints at iter 3 (eval and checkpoint fire independently)
+- ✅ `data/metrics/nn_history.json` — 5 entries with correct structure
+- ✅ `data/metrics/nn_fitness_chart.png` — 4-subplot figure (~95 KB)
+- ✅ `models/checkpoint_003.pt` — saved
+- ✅ End summary with totals and best eval
+
+**Resume also verified** (second run after first 5 iters):
+```
+Resuming from iteration 5 (last loss: 0.2806, buffer will reset)
+...
+Iter 0006/0010 | loss:   0.0805 | buffer:     75 | games:     30 | 2.6s
+...
+── Eval @ iter 0008 ────────────────────────────
+  Candidate vs Champion: 29W / 21L / 0D  (58.0%)
+  → NEW CHAMPION saved to models/best_model.pt
+──────────────────────────────────────────────
+  ✓ Checkpoint saved: models/checkpoint_008.pt
+...
+Total iterations: 10  |  Total games: 50
+Best eval win rate: 0.580 (iter 0008)
+```
+
+History file accumulated to 10 entries across both sessions.
+
+---
+
+### Files changed
+- `src/nn/train_nn.py` — complete rewrite of `training_loop`; `evaluate` now returns `dict` (wins/losses/draws/win_rate); new helpers `_load_nn_history`, `_append_nn_history`, `_print_header`, `_format_duration`
+- `src/nn/chart.py` — new file; `save_nn_chart(history)` 4-subplot PNG
+- `scripts/train_nn.py` — `--checkpoint-every` flag added
+
+---
+
 ## Entry 017 — Phase B1 + B2: Neural Network Self-Play
 **Date:** 2026-03-25
 
@@ -1316,6 +1511,56 @@ there are compelling head-to-head matchups ready when the viewer is built.
 - Bot loader reads a `.json` weight file in the browser (plain JSON, no server needed)
 - Bot vs Bot mode added to `game.js` alongside existing human vs AI mode
 - Builds on top of the existing game UI — no new framework required
+
+---
+
+## Entry 019 — Bot Viewer UI Implemented
+**Date:** 2026-03-25
+
+### What was built
+Implemented a browser-based Connect 4 viewer served by Flask with a single static page UI.
+
+Files added:
+- `scripts/viewer.py` — local entrypoint that serves the viewer on port 5000
+- `src/viewer/__init__.py` — exports the Flask app
+- `src/viewer/bot_registry.py` — registers available bots and serialisable bot metadata
+- `src/viewer/server.py` — Flask routes for page load, bot list, move requests, status, and static assets
+- `static/index.html` — single-page viewer shell
+- `static/style.css` — board, heatmap, mode cards, setup, and control styling
+- `static/game.js` — browser-side state machine, game rules, rendering, and bot-vs-bot controls
+
+Other files updated:
+- `requirements.txt` — added `flask`
+
+### Bot availability in the viewer
+- **Random** — available
+- **Minimax (evolved)** — available, using `load_best(DEFAULT_WEIGHTS)['weights']` at depth 6
+- **MCTS Fast (200 iters)** — available
+- **MCTS Strong (1000 iters)** — available
+- **Neural Network** — currently greyed out because `models/best_model.pt` is not present
+
+### Viewer behaviour implemented
+- Mode select screen with Player vs Player, Player vs Bot, and Bot vs Bot cards
+- PvP gameplay fully handled in browser-side JS
+- PvBot setup with colour picker and bot dropdown; bot moves fetched from Python
+- Bot-vs-bot setup with separate bot selectors for Red and Yellow
+- Heatmap panel showing minimax scores, flat scores for random/MCTS, and neural scores when available
+- Bot-vs-bot controls for Reset, Next, Simulate, Pause, and speed changes
+- Head-to-head record tracking across bot-vs-bot resets
+- Back button resets the viewer state and returns to mode select
+
+### Verification checklist results
+- [x] Python syntax check passed for `src/viewer/*.py` and `scripts/viewer.py`
+- [x] JavaScript syntax check passed for `static/game.js`
+- [x] Neural bot correctly resolves to unavailable without `models/best_model.pt`
+- [x] Viewer server started successfully via `.venv/bin/python scripts/viewer.py`
+- [x] `/api/bots`, `/api/status`, and `/api/move` smoke-tested successfully
+- [ ] Browser verification at `http://localhost:5000`
+
+### Issues encountered and resolutions
+- **Flask not installed in the system `python3` environment**: `python3 -c "import flask"` failed with `ModuleNotFoundError`. Resolved for project use by adding `flask` to `requirements.txt` and confirming the existing repo virtualenv can run the viewer successfully.
+- **Heatmap state in PvBot**: the first implementation left the latest bot heatmap fully bright after turn handoff. Resolved by re-rendering the last bot scores after the turn flips back to the player, which keeps the heatmap dimmed on the player's turn.
+- **Neural viewer dependency safety**: the viewer must keep working when `torch` or the trained model is missing. Resolved with guarded import/loading logic and an unavailable reason string instead of raising at import time.
 
 ---
 

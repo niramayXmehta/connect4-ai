@@ -1,12 +1,20 @@
-.DS_Store
-node_modules/
-data/logs/*.log
-data/weights/gen_*.json
-*.log
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
-models/*.pt
-models/*.pth
 .venv/
+
+# Models — too large for git
+models/checkpoint_*.pt
+models/checkpoint_*.pth
+
+# Generated data
+data/weights/gen_*.json
+data/metrics/fitness_chart.png
+data/metrics/nn_fitness_chart.png
+
+# macOS
+.DS_Store
+
+# Claude settings
+.claude/

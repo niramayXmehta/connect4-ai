@@ -32,8 +32,10 @@ def _parse_args():
                    help="Training batch size (default: 256)")
     p.add_argument("--train-steps",  type=int, default=64,  dest="train_steps",
                    help="Gradient steps per iteration (default: 64)")
-    p.add_argument("--eval-every",   type=int, default=10,  dest="eval_every",
+    p.add_argument("--eval-every",        type=int, default=10,  dest="eval_every",
                    help="Evaluate vs champion every N iterations (default: 10)")
+    p.add_argument("--checkpoint-every", type=int, default=10,  dest="checkpoint_every",
+                   help="Save checkpoint every N iterations (default: 10)")
     return p.parse_args()
 
 
