@@ -31,23 +31,23 @@ def _register(bot_id, label, fn=None, reason=None, kind=None):
     BOT_SPECS[bot_id] = {"kind": kind or bot_id, "label": label}
 
 
-_register("random", "Random", random_bot, kind="flat")
+_register("random", "CHAOS (Random)", random_bot, kind="flat")
 _register(
     "minimax",
-    "Minimax (evolved)",
+    "DARWIN (Minimax)",
     make_minimax_bot(depth=6, weights=BEST_WEIGHTS),
     kind="minimax",
 )
-_register("mcts_fast", "MCTS Fast (200 iters)", make_mcts_bot(iterations=200), kind="flat")
+_register("mcts_fast", "SCOUT (MCTS Fast)", make_mcts_bot(iterations=200), kind="flat")
 _register(
     "mcts_strong",
-    "MCTS Strong (1000 iters)",
+    "ORACLE (MCTS Strong)",
     make_mcts_bot(iterations=1000),
     kind="flat",
 )
 
 if not MODEL_PATH.exists():
-    _register("neural", "Neural Network", reason="requires trained model", kind="neural")
+    _register("neural", "NEXUS (Neural Network)", reason="requires trained model", kind="neural")
 else:
     try:
         import torch
@@ -79,9 +79,9 @@ else:
             return max(valid, key=lambda item: item[1])[0]
 
         BOT_SPECS["neural_scores"] = _neural_scores
-        _register("neural", "Neural Network", _neural_bot, kind="neural")
+        _register("neural", "NEXUS (Neural Network)", _neural_bot, kind="neural")
     except ImportError:
-        _register("neural", "Neural Network", reason="requires torch", kind="neural")
+        _register("neural", "NEXUS (Neural Network)", reason="requires torch", kind="neural")
     except Exception as exc:
-        _register("neural", "Neural Network", reason=f"failed to load model: {exc}", kind="neural")
+        _register("neural", "NEXUS (Neural Network)", reason=f"failed to load model: {exc}", kind="neural")
 

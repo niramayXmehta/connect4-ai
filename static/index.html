@@ -4,17 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connect4 AI Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <div class="bg-layer" aria-hidden="true">
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-orb orb-3"></div>
+    <div class="bg-grid"></div>
+  </div>
+
   <main class="app-shell">
     <section id="mode-screen" class="screen active">
       <div class="hero">
         <h1>Connect4 AI</h1>
+        <p class="hero-sub">Three bots. One board. Pick your fight.</p>
         <div class="mode-cards">
-          <button class="mode-card" data-mode="pvp">Player vs Player</button>
-          <button class="mode-card" data-mode="pvbot">Player vs Bot</button>
-          <button class="mode-card" data-mode="bvb">Bot vs Bot</button>
+          <button class="mode-card" data-mode="pvp">
+            <span class="card-icon">⬡</span>
+            <span class="card-title">Player vs Player</span>
+            <span class="card-desc">Local two player</span>
+          </button>
+          <button class="mode-card" data-mode="pvbot">
+            <span class="card-icon">◈</span>
+            <span class="card-title">Player vs Bot</span>
+            <span class="card-desc">Choose your opponent</span>
+          </button>
+          <button class="mode-card" data-mode="bvb">
+            <span class="card-icon">⟁</span>
+            <span class="card-title">Bot vs Bot</span>
+            <span class="card-desc">Watch them fight</span>
+          </button>
         </div>
       </div>
     </section>
@@ -38,6 +59,12 @@
             <div class="panel-header">
               <h3>Heatmap</h3>
               <span class="panel-caption">Bot read</span>
+              <div class="thinking-indicator" id="thinking-indicator">
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot"></span>
+                <span class="thinking-dot"></span>
+                <span class="thinking-label">thinking</span>
+              </div>
             </div>
             <div id="heatmap" class="heatmap"></div>
             <div class="index-row" id="heatmap-index"></div>
@@ -73,11 +100,14 @@
               <button id="simulate-button" class="primary-button">Simulate</button>
               <button id="pause-button" class="secondary-button">Pause</button>
             </div>
-            <label class="slider-wrap" for="speed-slider">
-              <span>Speed</span>
+            <div class="slider-track-wrap">
+              <span class="slider-extreme">Slow</span>
               <input id="speed-slider" type="range" min="0" max="4" step="1" value="2">
-              <span id="speed-label">1.0s</span>
-            </label>
+              <span class="slider-extreme">Fast</span>
+            </div>
+            <div class="speed-steps">
+              <span>3s</span><span>2s</span><span>1s</span><span>0.5s</span><span>0.25s</span>
+            </div>
             <div id="record-text" class="record-text">Red: 0 Draws: 0 Yellow: 0</div>
           </div>
         </div>

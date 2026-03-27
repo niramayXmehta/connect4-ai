@@ -1565,3 +1565,40 @@ Other files updated:
 ---
 
 *This file is updated after every major change, training run, or architectural decision.*
+
+---
+
+## Entry 019 — Visual Redesign: Deep Space / Terminal Luxury
+**Date:** 2026-03-27
+**Milestone:** Full browser viewer visual redesign
+
+### What was redesigned
+
+Complete aesthetic overhaul of the browser viewer. Game logic untouched.
+
+**Design direction:** Deep space / terminal luxury — dark navy base, sharp amber-gold accent, monospace typography throughout.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/viewer/bot_registry.py` | Renamed bot labels: CHAOS, DARWIN, SCOUT, ORACLE, NEXUS |
+| `static/index.html` | Added Google Fonts, bg-layer orbs/grid, hero subtitle, structured mode cards with icon/title/desc, thinking indicator in heatmap panel header, new slider layout with Slow/Fast labels and speed step markers |
+| `static/style.css` | Full rewrite — new CSS custom properties, animated background orbs, dot grid, Syne/DM Mono fonts, gold gradient h1, mode cards with hover shimmer/lift, panel gold accent top line, thinking dots animation, radial-gradient pieces with colour glow, win-pulse animations per colour, cold-blue→warm-gold heatmap ramp, monospace buttons/controls |
+| `static/game.js` | Thinking indicator toggle in `requestMove()`, heatmap colour ramp updated (cold-blue→warm-gold), `updateRecord()` outputs coloured HTML spans |
+
+### Verification checklist
+
+- [x] Background orbs visible and slowly drifting, dot grid subtle
+- [x] Hero `h1` has gold gradient text
+- [x] Mode cards show icon + title + desc, gold shimmer on hover, lift on hover
+- [x] Thin gold accent line visible at top of each panel
+- [x] Thinking dots animate in gold when bot is computing, fade out when done
+- [x] Heatmap uses cold-blue → warm-gold colour ramp
+- [x] Pieces have radial gradient and colour glow
+- [x] Winning pieces pulse with matching colour glow
+- [x] Bot names show as DARWIN, SCOUT, ORACLE etc. in dropdowns
+- [x] Red colour picker highlights red when active, yellow highlights yellow
+- [x] Record shows coloured numbers (red / muted / yellow)
+- [x] Speed steps labels align under slider
+- [x] All game logic unchanged — wins, draws, heatmap, simulation, speed control all work

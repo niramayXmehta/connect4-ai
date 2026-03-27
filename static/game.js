@@ -177,10 +177,10 @@ function renderHeatmap(scores = null) {
     } else {
       const normalized = maxScore > 0 ? Math.max(0, score) / maxScore : 0;
       const intensity = uniform ? 0.2 : Math.max(0.08, normalized);
-      const blue = Math.round(255 - (255 - 21) * intensity);
-      const green = Math.round(255 - (255 - 101) * intensity);
-      const red = Math.round(255 - (255 - 12) * intensity);
-      cell.style.background = `rgb(${red}, ${green}, ${blue})`;
+      const r = Math.round(20  + 220 * intensity);
+      const g = Math.round(40  + 152 * intensity);
+      const b = Math.round(80  - 16  * intensity);
+      cell.style.background = `rgb(${r}, ${g}, ${b})`;
     }
     els.heatmap.appendChild(cell);
   });
@@ -188,6 +188,7 @@ function renderHeatmap(scores = null) {
 
 async function requestMove(botId) {
   state.botThinking = true;
+  document.getElementById('thinking-indicator').classList.add('active');
   renderBoard();
   updateStatus("Bot thinking...");
   try {
@@ -200,6 +201,7 @@ async function requestMove(botId) {
     return await response.json();
   } finally {
     state.botThinking = false;
+    document.getElementById('thinking-indicator').classList.remove('active');
     renderBoard();
   }
 }
@@ -250,7 +252,10 @@ function checkGameOver(token) {
 }
 
 function updateRecord() {
-  els.recordText.textContent = `Red: ${state.record.a} Draws: ${state.record.draws} Yellow: ${state.record.b}`;
+  els.recordText.innerHTML =
+    `<span style="color:var(--red)">${state.record.a}</span> · ` +
+    `<span style="color:var(--muted-hi)">${state.record.draws} draws</span> · ` +
+    `<span style="color:var(--yellow)">${state.record.b}</span>`;
 }
 
 function resetBoardState() {
