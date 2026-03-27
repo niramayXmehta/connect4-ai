@@ -7,6 +7,8 @@ __pycache__/
 # Models — too large for git
 models/checkpoint_*.pt
 models/checkpoint_*.pth
+models/*.pt
+models/*.pth
 
 # Generated data
 data/weights/gen_*.json
