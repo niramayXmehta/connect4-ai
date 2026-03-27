@@ -199,7 +199,14 @@ def make_mcts_bot(iterations=500, C=1.414, rollout_weights=None, temperature=1.0
         # Pick move with the most visits (robust to outliers).
         if not root.children:
             return random.choice(valid_cols(board))
-        best = max(root.children, key=lambda n: n.visits + random.uniform(0, 0.5))
+
+        # Sample proportionally from visit counts instead of always taking argmax.
+        # Breaks determinism while still strongly preferring the most-visited move.
+        children = root.children
+        visits = [c.visits for c in children]
+        total = sum(visits)
+        probs = [v / total for v in visits]
+        best = random.choices(children, weights=probs, k=1)[0]
         return best.move
 
     return bot

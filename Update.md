@@ -1568,6 +1568,24 @@ Other files updated:
 
 ---
 
+## Entry 020 — MCTS Determinism Fix: Proportional Visit Sampling
+**Date:** 2026-03-27
+**File:** `src/bots/mcts.py`
+
+### What changed
+
+Replaced argmax move selection with proportional sampling over visit counts.
+
+**Before:** `max(root.children, key=lambda n: n.visits + random.uniform(0, 0.5))` — tiebreak noise was too small relative to visit counts, causing MCTS to play near-identically every game.
+
+**After:** Visit counts are normalised into a probability distribution; `random.choices()` samples from it. The most-visited move is still strongly preferred but no longer deterministic.
+
+### Why
+
+MCTS was playing the same game repeatedly in Bot vs Bot mode — identical openings, identical outcomes. Proportional sampling preserves the quality signal from the search while introducing meaningful variation between games.
+
+---
+
 ## Entry 019 — Visual Redesign: Deep Space / Terminal Luxury
 **Date:** 2026-03-27
 **Milestone:** Full browser viewer visual redesign
